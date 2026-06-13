@@ -1,0 +1,34 @@
+version: "3.8"
+
+# GPT-SoVITS TTS API 独立部署
+# 用法: docker compose -f docker-compose.api.yaml up -d
+
+services:
+  gpt-sovits-api:
+    image: gpt-sovits-api:latest
+    container_name: gpt-sovits-api
+    ports:
+      - "9880:9880"
+    volumes:
+      # 挂载模型文件（如需持久化）
+      - ./GPT_SoVITS/pretrained_models:/workspace/GPT-SoVITS/GPT_SoVITS/pretrained_models
+      # 挂载参考音频目录
+      - ./reference_audios:/workspace/GPT-SoVITS/reference_audios
+    environment:
+      - PYTHONUNBUFFERED=1
+      - is_half=true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    shm_size: "8g"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9880/control?command=restart"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s

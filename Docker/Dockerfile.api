@@ -1,0 +1,53 @@
+# GPT-SoVITS TTS API Docker 镜像
+# 构建: docker build -t gpt-sovits-api .
+# 运行: docker run --gpus all -p 9880:9880 -v /path/to/models:/workspace/models gpt-sovits-api
+
+ARG CUDA_VERSION=12.6
+ARG TORCH_BASE=full
+
+FROM xxxxrt666/torch-base:cu${CUDA_VERSION}-${TORCH_BASE}
+
+LABEL maintainer="GPT-SoVITS"
+LABEL description="GPT-SoVITS TTS API Service"
+
+ARG CUDA_VERSION=12.6
+ENV CUDA_VERSION=${CUDA_VERSION}
+
+SHELL ["/bin/bash", "-c"]
+WORKDIR /workspace/GPT-SoVITS
+
+COPY Docker /workspace/GPT-SoVITS/Docker/
+COPY extra-req.txt /workspace/GPT-SoVITS/
+COPY requirements.txt /workspace/GPT-SoVITS/
+COPY install.sh /workspace/GPT-SoVITS/
+
+RUN bash Docker/install_wrapper.sh
+
+ENV PYTHONPATH="/workspace/GPT-SoVITS"
+
+RUN conda init bash && echo "conda activate base" >> ~/.bashrc
+
+WORKDIR /workspace
+RUN rm -rf /workspace/GPT-SoVITS
+
+COPY . /workspace/GPT-SoVITS
+
+# 创建模型软链接目录
+RUN mkdir -p /workspace/models
+
+# 默认启动 API 服务
+EXPOSE 9880
+
+# 启动脚本：按需替换模型路径和参考音频
+COPY start_api.sh /workspace/GPT-SoVITS/
+RUN chmod +x /workspace/GPT-SoVITS/start_api.sh
+
+WORKDIR /workspace/GPT-SoVITS
+
+# 默认启动 API（不依赖参考音频，启动后通过 /change_refer 设置）
+CMD ["python3", "api.py", \
+     "-s", "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth", \
+     "-g", "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt", \
+     "-d", "cuda", \
+     "-a", "0.0.0.0", \
+     "-p", "9880"]

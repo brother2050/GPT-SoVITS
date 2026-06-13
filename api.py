@@ -1082,6 +1082,11 @@ def handle_change(path, text, language):
             {"code": 400, "message": '缺少任意一项以下参数: "path", "text", "language"'}, status_code=400
         )
 
+    # 校验语言参数
+    _, err = validate_language(language, "language")
+    if err:
+        return err
+
     if path != "" or path is not None:
         default_refer.path = path
     if text != "" or text is not None:
@@ -1095,6 +1100,22 @@ def handle_change(path, text, language):
     logger.info(f"is_ready: {default_refer.is_ready()}")
 
     return JSONResponse({"code": 0, "message": "Success"}, status_code=200)
+
+
+def validate_language(lang, field_name="text_language"):
+    """校验语言参数是否合法"""
+    if lang is None or lang == "":
+        return None, JSONResponse(
+            {"code": 400, "message": f"参数 {field_name} 不能为空"}, status_code=400
+        )
+    lang_lower = lang.lower()
+    if lang_lower not in dict_language:
+        valid_keys = [k for k in dict_language if not k.startswith("all_") and k not in ("zh","yue","ja","ko","en","auto","auto_yue")]
+        return None, JSONResponse(
+            {"code": 400, "message": f"不支持的语言: {lang}，支持的语言: 中文, 英文, 日文, 韩文, 粤语, zh, en, ja, ko, yue, auto, auto_yue, 中英混合, 粤英混合, 日英混合, 韩英混合, 多语种混合, 多语种混合(粤语)"},
+            status_code=400,
+        )
+    return dict_language[lang_lower], None
 
 
 def handle(
@@ -1112,6 +1133,13 @@ def handle(
     sample_steps,
     if_sr,
 ):
+    # 校验 text 和 text_language
+    if text is None or text == "":
+        return JSONResponse({"code": 400, "message": "参数 text 不能为空"}, status_code=400)
+    _, err = validate_language(text_language, "text_language")
+    if err:
+        return err
+
     if (
         refer_wav_path == ""
         or refer_wav_path is None
@@ -1128,28 +1156,37 @@ def handle(
         if not default_refer.is_ready():
             return JSONResponse({"code": 400, "message": "未指定参考音频且接口无预设"}, status_code=400)
 
+    # 校验 prompt_language
+    _, err = validate_language(prompt_language, "prompt_language")
+    if err:
+        return err
+
     if cut_punc == None:
         text = cut_text(text, default_cut_punc)
     else:
         text = cut_text(text, cut_punc)
 
-    return StreamingResponse(
-        get_tts_wav(
-            refer_wav_path,
-            prompt_text,
-            prompt_language,
-            text,
-            text_language,
-            top_k,
-            top_p,
-            temperature,
-            speed,
-            inp_refs,
-            sample_steps,
-            if_sr,
-        ),
-        media_type="audio/" + media_type,
-    )
+    try:
+        return StreamingResponse(
+            get_tts_wav(
+                refer_wav_path,
+                prompt_text,
+                prompt_language,
+                text,
+                text_language,
+                top_k,
+                top_p,
+                temperature,
+                speed,
+                inp_refs,
+                sample_steps,
+                if_sr,
+            ),
+            media_type="audio/" + media_type,
+        )
+    except Exception as e:
+        logger.error(f"TTS推理异常: {e}")
+        return JSONResponse({"code": 500, "message": f"TTS推理失败: {str(e)}"}, status_code=500)
 
 
 # --------------------------------

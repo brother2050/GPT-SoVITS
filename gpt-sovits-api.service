@@ -1,0 +1,37 @@
+[Unit]
+Description=GPT-SoVITS TTS API Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/workspace
+Environment="PATH=/root/miniconda/envs/GPTSoVits/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+
+# 启动命令 - 根据实际模型路径和需求修改
+ExecStart=/root/miniconda/envs/GPTSoVits/bin/python3 /workspace/api.py \
+    -s "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth" \
+    -g "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt" \
+    -dr "参考音频路径.wav" \
+    -dt "参考音频文本。" \
+    -dl "zh" \
+    -d "cuda" \
+    -a "0.0.0.0" \
+    -p 9880
+
+# 自动重启
+Restart=on-failure
+RestartSec=10
+
+# 资源限制
+MemoryHigh=12G
+MemoryMax=16G
+CPUQuota=400%
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
