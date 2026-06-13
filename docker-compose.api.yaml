@@ -14,9 +14,12 @@ services:
       - ./GPT_SoVITS/pretrained_models:/workspace/GPT-SoVITS/GPT_SoVITS/pretrained_models
       # 挂载参考音频目录
       - ./reference_audios:/workspace/GPT-SoVITS/reference_audios
+      # 挂载上传目录
+      - ./refs:/workspace/GPT-SoVITS/refs
     environment:
       - PYTHONUNBUFFERED=1
       - is_half=true
+      - GPT_SOVITS_UPLOAD_DIR=/workspace/GPT-SoVITS/refs
     deploy:
       resources:
         reservations:

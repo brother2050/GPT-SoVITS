@@ -15,6 +15,7 @@ BIND_ADDR="0.0.0.0"                   # 监听地址
 PORT="9880"                            # 端口
 STREAM_MODE="close"                    # close / normal / keepalive
 MEDIA_TYPE="wav"                       # wav / ogg / aac
+UPLOAD_DIR="./refs"                    # 参考音频上传目录
 # ==========================================
 
 # 切换到项目目录
@@ -32,8 +33,10 @@ echo "SoVITS 模型: $SOVITS_MODEL"
 echo "GPT 模型:    $GPT_MODEL"
 echo "设备:        $DEVICE"
 echo "监听:        $BIND_ADDR:$PORT"
+echo "上传目录:    $UPLOAD_DIR"
 echo "=========================================="
 
+export GPT_SOVITS_UPLOAD_DIR="$UPLOAD_DIR"
 exec python3 api.py \
     -s "$SOVITS_MODEL" \
     -g "$GPT_MODEL" \

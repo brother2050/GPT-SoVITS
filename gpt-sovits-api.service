@@ -8,6 +8,7 @@ User=root
 WorkingDirectory=/workspace
 Environment="PATH=/root/miniconda/envs/GPTSoVits/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PYTHONUNBUFFERED=1"
+Environment="GPT_SOVITS_UPLOAD_DIR=/workspace/refs"
 
 # 启动命令 - 根据实际模型路径和需求修改
 ExecStart=/root/miniconda/envs/GPTSoVits/bin/python3 /workspace/api.py \
