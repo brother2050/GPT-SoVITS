@@ -99,6 +99,62 @@ RESP:
 成功: 返回"success", http code 200
 失败: 返回包含错误信息的 json, http code 400
 
+
+### 参考音频上传
+
+endpoint: `/upload_refer`
+
+POST (multipart/form-data):
+```
+curl -F "file=@voice.wav" http://127.0.0.1:9880/upload_refer
+curl -F "file=@voice.wav" "http://127.0.0.1:9880/upload_refer?name=linxia.wav"
+```
+
+RESP:
+```json
+{"message": "success", "filename": "voice.wav", "size": 12345, "path": "/abs/path/refs/voice.wav"}
+```
+
+
+### 列出参考音频
+
+endpoint: `/list_refers`
+
+GET:
+```
+http://127.0.0.1:9880/list_refers
+```
+
+RESP:
+```json
+{"files": [{"name": "voice.wav", "size": 12345, "path": "/abs/path/refs/voice.wav"}]}
+```
+
+
+### 下载参考音频
+
+endpoint: `/download_refer/{filename}`
+
+GET:
+```
+http://127.0.0.1:9880/download_refer/voice.wav
+```
+
+
+### 删除参考音频
+
+endpoint: `/delete_refer/{filename}`
+
+DELETE:
+```
+curl -X DELETE http://127.0.0.1:9880/delete_refer/voice.wav
+```
+
+RESP:
+```json
+{"message": "deleted voice.wav"}
+```
+
 """
 
 import os
@@ -116,8 +172,9 @@ import wave
 import signal
 import numpy as np
 import soundfile as sf
-from fastapi import FastAPI, Response
-from fastapi.responses import StreamingResponse, JSONResponse
+from pathlib import Path
+from fastapi import FastAPI, Response, UploadFile, File
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 import uvicorn
 from io import BytesIO
 from tools.i18n.i18n import I18nAuto
@@ -563,6 +620,99 @@ async def set_sovits_weights(weights_path: str = None):
     except Exception as e:
         return JSONResponse(status_code=400, content={"message": "change sovits weight failed", "Exception": str(e)})
     return JSONResponse(status_code=200, content={"message": "success"})
+
+
+# -------------------------------------------------------
+# 参考音频上传与管理
+# -------------------------------------------------------
+
+UPLOAD_DIR = os.environ.get("GPT_SOVITS_UPLOAD_DIR", os.path.join(now_dir, "refs"))
+ALLOWED_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
+
+Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+
+
+def _safe_filename(filename: str) -> str:
+    name = Path(filename).name
+    if not name or name.startswith("."):
+        name = "upload.wav"
+    return name
+
+
+@APP.post("/upload_refer")
+async def upload_refer(file: UploadFile = File(...), name: str = None):
+    """上传参考音频文件
+
+    multipart/form-data: POST /upload_refer + file 字段
+    指定文件名: POST /upload_refer?name=xxx.wav
+    """
+    filename = name or file.filename or "upload.wav"
+    filename = _safe_filename(filename)
+
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return JSONResponse(
+            status_code=400,
+            content={"message": f"unsupported format: {ext}, allowed: {', '.join(ALLOWED_EXTENSIONS)}"},
+        )
+
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        return JSONResponse(
+            status_code=400,
+            content={"message": f"file too large, max {MAX_UPLOAD_SIZE // 1024 // 1024}MB"},
+        )
+
+    dest = Path(UPLOAD_DIR) / filename
+    dest.write_bytes(content)
+    print(f"[upload_refer] saved: {filename} ({len(content)} bytes)")
+
+    return JSONResponse(status_code=200, content={
+        "message": "success",
+        "filename": filename,
+        "size": len(content),
+        "path": str(dest.resolve()),
+    })
+
+
+@APP.get("/list_refers")
+async def list_refers():
+    """列出已上传的参考音频"""
+    d = Path(UPLOAD_DIR)
+    if not d.exists():
+        return JSONResponse(status_code=200, content={"files": []})
+    files = []
+    for f in sorted(d.iterdir()):
+        if f.is_file() and f.suffix.lower() in ALLOWED_EXTENSIONS:
+            files.append({
+                "name": f.name,
+                "size": f.stat().st_size,
+                "path": str(f.resolve()),
+            })
+    return JSONResponse(status_code=200, content={"files": files})
+
+
+@APP.get("/download_refer/{filename}")
+async def download_refer(filename: str):
+    """下载参考音频"""
+    name = _safe_filename(filename)
+    fpath = Path(UPLOAD_DIR) / name
+    if not fpath.exists():
+        return JSONResponse(status_code=404, content={"message": "file not found"})
+    return FileResponse(fpath, media_type="audio/wav", filename=name)
+
+
+@APP.delete("/delete_refer/{filename}")
+async def delete_refer(filename: str):
+    """删除参考音频"""
+    name = _safe_filename(filename)
+    fpath = Path(UPLOAD_DIR) / name
+    if not fpath.exists():
+        return JSONResponse(status_code=404, content={"message": "file not found"})
+    fpath.unlink()
+    print(f"[delete_refer] deleted: {name}")
+    return JSONResponse(status_code=200, content={"message": f"deleted {name}"})
 
 
 if __name__ == "__main__":
